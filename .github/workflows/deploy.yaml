@@ -32,4 +32,29 @@ jobs:
           docker tag meu-website:v1.0 303189218020.dkr.ecr.us-east-1.amazonaws.com/site_prod:v1.0
           docker push  303189218020.dkr.ecr.us-east-1.amazonaws.com/site_prod:v1.0
 
+  job2:
+    name: deploy_ec2
+    needs: job1
+    env:
+      INSTANCE_KEY: ${{secrets.INSTANCE_KEY}}
+      PUBLIC_IP: ${{secrets.PUBLIC_IP}}
+    runs-on: ubuntu-latest
+    steps:
+     - name: Deploy EC2 SSH
+       run: |
+          echo "$INSTANCE_KEY" > chave-site-prod.pem
+          chmod 400 chave-site-prod.pem
+          ssh -i chave-site-prod.pem -o StrictHostKeyChecking=no ec2-user@$PUBLIC_IP << EOF
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 303189218020.dkr.ecr.us-east-1.amazonaws.com
+            docker pull 303189218020.dkr.ecr.us-east-1.amazonaws.com/site_prod:v1.0
+            echo "parando container antigo site"
+            docker stop site || true
+            echo "removendo container antigo site"
+            docker rm site || true
+            echo "rodando nova tag da imagem"
+            docker run -d -p 80:80 --name site 303189218020.dkr.ecr.us-east-1.amazonaws.com/site_prod:v1.0
+            echo "Parabéns! Imagem foi atualizada!"
+            docker ps
+          EOF
+          rm chave-site-prod.pem
   
